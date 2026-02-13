@@ -1,0 +1,53 @@
+# 預設排除的資料夾（例如虛擬環境、編譯產物）
+exclude: '^(.venv|node_modules|dist)/'
+
+repos:
+  # --- 1. Python: 排序匯入 (isort) ---
+  - repo: https://github.com/pycqa/isort
+    rev: 7.0.0
+    hooks:
+      - id: isort
+        args: ["--profile", "black"] # 確保 isort 與 black 格式不衝突
+
+  # --- 2. Python: 格式化 (Black) ---
+  - repo: https://github.com/psf/black
+    rev: 26.1.0
+    hooks:
+      - id: black
+        language_version: python3.11
+
+  # --- 3. React / TypeScript / Markdown: 格式化 (Prettier) ---
+  - repo: https://github.com/pre-commit/mirrors-prettier
+    rev: v4.0.0-alpha.8
+    hooks:
+      - id: prettier
+        # 包含 react, typescript 和 markdown 檔案
+        types_or: [javascript, tsx, ts, markdown, css, json]
+        additional_dependencies:
+          - prettier
+          - "@types/node"
+
+  # --- 4. Typst: 格式化 (Typstyle) ---
+  # - repo: https://github.com/Enter-tainer/typstyle
+  #   rev: v0.14.4
+  #   hooks:
+  #     - id: typstyle
+  #       args: ["--locked"]
+
+  # --- 4. Typst: 格式化 (Typstyle) 直接用系統已有的 (貢獻者請先自行安裝) ---
+  - repo: local
+    hooks:
+      - id: typstyle
+        name: typstyle
+        entry: typstyle
+        language: system
+        files: \.typ$
+
+  # --- 5. 通用檢查: 檢查語法錯誤、結尾空格等 ---
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace      # 移除行尾多餘空格
+      - id: end-of-file-fixer        # 確保檔案結尾有換行
+      - id: check-yaml               # 檢查 YAML 語法
+      - id: check-added-large-files  # 防止大檔案被誤傳
