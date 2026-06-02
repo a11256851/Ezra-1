@@ -24,17 +24,23 @@ from transformers import (
 # NOTE 不過若要使用 ocr 功能，就必須要加上 layout 才行
 
 
-DOC = "./test/中文測試文件.pdf"
-IMAGES_OUTPUT_DIR = "./test/imgs/"
-MD_OUTPUT_PATH = "./test/output.md"
+DOC = "./tmp/中文測試文件.pdf"
+IMAGES_OUTPUT_DIR = "./tmp/imgs/"
+MD_OUTPUT_PATH = "./tmp/output.md"
 
-BASE_PATH = "./test/datas"  # 存模型快取等資料
-if not os.path.exists(BASE_PATH):
-    os.makedirs(BASE_PATH)
-
+BASE_PATH = "./tmp/datas"  # 存模型快取等資料
 LLM_CACHE_PATH = os.path.join(BASE_PATH, "llm_cache")
-if not os.path.exists(LLM_CACHE_PATH):
-    os.makedirs(LLM_CACHE_PATH)
+
+
+def _make_sure_path_exists(p):
+    if not os.path.exists(p):
+        os.makedirs(p)
+
+
+def setup():
+    for p in [BASE_PATH, LLM_CACHE_PATH]:
+        _make_sure_path_exists(p)
+
 
 # 自動偵測是否支援 bfloat16
 compute_dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16

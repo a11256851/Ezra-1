@@ -1,5 +1,5 @@
 # 預設排除的資料夾（例如虛擬環境、編譯產物）
-exclude: '^(.venv|node_modules|dist)/'
+exclude: "^(.venv|node_modules|dist)/"
 
 repos:
   # --- 1. Python: 排序匯入 (isort) ---
@@ -15,6 +15,7 @@ repos:
     hooks:
       - id: black
         language_version: python3.11
+        args: ["--target-version", "py311"]
 
   # --- 3. React / TypeScript / Markdown: 格式化 (Prettier) ---
   - repo: https://github.com/pre-commit/mirrors-prettier
@@ -47,7 +48,7 @@ repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:
-      - id: trailing-whitespace      # 移除行尾多餘空格
-      - id: end-of-file-fixer        # 確保檔案結尾有換行
-      - id: check-yaml               # 檢查 YAML 語法
-      - id: check-added-large-files  # 防止大檔案被誤傳
+      - id: trailing-whitespace # 移除行尾多餘空格
+      - id: end-of-file-fixer # 確保檔案結尾有換行
+      - id: check-yaml # 檢查 YAML 語法
+      - id: check-added-large-files # 防止大檔案被誤傳
