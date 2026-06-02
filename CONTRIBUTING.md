@@ -17,7 +17,7 @@ Please install `pre-commit` and formatters before making any commit.
 1. Python
 
 ```sh
-pip install -r requirements.txt
+uv sync
 ```
 
 2. Node.js
@@ -29,15 +29,13 @@ npm install
 3. Pre-commit
 
 ```sh
-pip install pre-commit
-pip install --upgrade pre-commit identify
-pre-commit install
+uv run pre-commit install
 ```
 
 ```sh
-pre-commit clean
-pre-commit autoupdate
-pre-commit run --all-files
+uv run pre-commit clean
+uv run pre-commit autoupdate
+uv run pre-commit run --all-files
 ```
 
 ## Formatters
@@ -83,7 +81,7 @@ In your terminal (PowerShell), run:
 
 ```powershell
 $env:PYTHONUTF8 = 1
-pre-commit run --all-files
+uv run pre-commit run --all-files
 ```
 
 ### Permanent Fix (Recommended)
