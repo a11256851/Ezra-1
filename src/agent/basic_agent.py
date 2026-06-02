@@ -21,7 +21,7 @@ class LangChainAgentManager:
 
     def _create_llm(self) -> ChatOllama:
         base_url = os.getenv("OLLAMA_BASE_URL")
-        model = os.getenv("OLLANA_MODEL", "gemma4:31b-cloud")
+        model = os.getenv("OLLAMA_MODEL", "gemma4:31b-cloud")
 
         kwargs = {"model": model, "temperature": 0}
         if base_url:
@@ -54,6 +54,17 @@ class LangChainAgentManager:
                 return str(last_msg)
 
         return str(result)
+
+    def get_stream_response(self, question: str, thread_id: str = "default-thread"):
+        config = {"configurable": {"thread_id": thread_id}}
+
+        for chunk, metadata in self.agent.stream(
+            {"messages": [HumanMessage(content=question)]},
+            config,
+            stream_mode="messages",
+        ):
+            if hasattr(chunk, "content") and chunk.content:
+                yield chunk.content
 
 
 agent_manager = LangChainAgentManager()

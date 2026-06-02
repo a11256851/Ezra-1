@@ -25,8 +25,10 @@ def main():
             print("Agent: ", end="", flush=True)
 
             try:
-                reply = agent_manager.get_response(question, thread_id)
-                print(reply)
+                for text_chunk in agent_manager.get_stream_response(
+                    question, thread_id=thread_id
+                ):
+                    print(text_chunk, end="", flush=True)
 
             except Exception as e:
                 print(f"Error: {e}", file=sys.stderr)
