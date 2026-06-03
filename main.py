@@ -1,44 +1,28 @@
+import os
+
+import uvicorn
+from fastapi import FastAPI, Query
+from fastapi.responses import FileResponse, StreamingResponse
+
 from src.agent import agent_manager
 
+app = FastAPI(title="LangChain Agent Web UI")
 
-def main():
-    thread_id = "user_1"
-    print("LangChain Agent (Multi-turn with Memory)")
-    print(f"Thread ID: {thread_id}")
-    print("Type your questions or 'exit' to quit\n")
 
-    try:
-        while True:
-            try:
-                question = input("You: ").strip()
-            except EOFError:
-                print("\nGoodbye!")
-                break
+@app.get("/")
+async def get_web_ui():
+    return FileResponse("index.html")
 
-            if not question:
-                continue
 
-            if question.lower() in ["exit", "quit", "bye"]:
-                print("Goodbye!")
-                break
+@app.get("/api/chat")
+async def chat_stream(
+    question: str = Query(..., description="使用者輸入的問題"),
+    thread_id: str = Query("default-thread", description="交談的 Thread ID"),
+):
+    generator = agent_manager.get_stream_response(question, thread_id)
 
-            print("Agent: ", end="", flush=True)
-
-            try:
-                for text_chunk in agent_manager.get_stream_response(
-                    question, thread_id=thread_id
-                ):
-                    print(text_chunk, end="", flush=True)
-
-            except Exception as e:
-                print(f"Error: {e}", file=sys.stderr)
-
-            print()  # Add spacing between turns
-
-    except KeyboardInterrupt:
-        print("\n\nInterrupted. Goodbye!")
-        sys.exit(0)
+    return StreamingResponse(generator, media_type="text/plain")
 
 
 if __name__ == "__main__":
-    main()
+    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
