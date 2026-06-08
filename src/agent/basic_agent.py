@@ -55,7 +55,9 @@ class LangChainAgentManager:
 
         return str(result)
 
-    def get_stream_response(self, question: str, thread_id: str = "default-thread"):
+    async def get_stream_response(
+        self, question: str, thread_id: str = "default-thread"
+    ):
         config = {"configurable": {"thread_id": thread_id}}
 
         for chunk, metadata in self.agent.stream(
@@ -66,11 +68,18 @@ class LangChainAgentManager:
             if hasattr(chunk, "content") and chunk.content:
                 yield chunk.content
 
-
-agent_manager = LangChainAgentManager()
+    def warnup(self):
+        print("Warning up LLM model...")
+        try:
+            self.llm.invoke("ping")
+            print("LLM model warned up successfully.")
+        except Exception as e:
+            print(f"Failed to warn up LLM: {e}")
 
 
 def example():
+    agent_manager = LangChainAgentManager()
+
     parser = argparse.ArgumentParser(
         description="LangChain ReAct agent with Ollama and document search (multi-turn with memory)"
     )

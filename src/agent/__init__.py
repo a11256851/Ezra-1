@@ -1,3 +1,4 @@
-from .basic_agent import LangChainAgentManager, agent_manager
+from .basic_agent import LangChainAgentManager
+from .storage import RetrievalManager
 
-__all__ = ["LangChainAgentManager", "agent_manager"]
+__all__ = ["LangChainAgentManager", "RetrievalManager"]

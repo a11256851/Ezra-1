@@ -19,6 +19,16 @@
         border-radius: 8px;
         box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1);
       }
+      #upload-section {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 15px;
+        padding-bottom: 15px;
+        border-bottom: 1px dashed #ddd;
+      }
+      #file-input {
+        flex: 1;
+      }
       #messages {
         height: 400px;
         overflow-y: auto;
@@ -42,6 +52,26 @@
       .agent {
         background-color: #f1f1f1;
         margin-right: auto;
+        white-space: pre-wrap;
+      }
+      .retrieval-context {
+        background-color: #f9f9f9;
+        color: #888888;
+        font-size: 0.85em;
+        border-left: 3px solid #ccc;
+        margin-right: auto;
+        margin-bottom: 10px;
+        padding: 6px 12px;
+        max-width: 85%;
+        white-space: pre-wrap;
+        font-style: italic;
+      }
+      .context-title {
+        font-weight: bold;
+        color: #555;
+        font-style: normal;
+        margin-bottom: 4px;
+        display: block;
       }
       #input-area {
         display: flex;
@@ -69,7 +99,23 @@
   <body>
     <div id="chat-container">
       <h2>LangChain Agent 互動介面</h2>
+
+      <div id="upload-section">
+        <input type="file" id="file-input" multiple accept=".txt" />
+        <button id="upload-btn" class="upload-btn" onclick="uploadFiles()">
+          上傳檔案
+        </button>
+        <button
+          id="clear-btn"
+          style="background-color: #dc3545"
+          onclick="clearDatabase()"
+        >
+          清除知識庫
+        </button>
+      </div>
+
       <div id="messages"></div>
+
       <div id="input-area">
         <input
           type="text"
@@ -84,6 +130,77 @@
     <script>
       const threadId = "web-session-" + Math.random().toString(36).substr(2, 9); // 隨機產生 thread_id 保持對話記憶
 
+      async function uploadFiles() {
+        const fileInput = document.getElementById("file-input");
+        const uploadBtn = document.getElementById("upload-btn");
+        const files = fileInput.files;
+
+        if (files.length === 0) {
+          alert("請先選取要上傳的檔案！");
+          return;
+        }
+
+        const formData = new FormData();
+        for (let i = 0; i < files.length; i++) {
+          formData.append("files", files[i]);
+        }
+
+        uploadBtn.disabled = true;
+        uploadBtn.innerText = "上傳中...";
+
+        try {
+          const response = await fetch("/api/store", {
+            method: "POST",
+            body: formData,
+          });
+
+          const result = await response.json();
+          if (response.ok && result.status === "success") {
+            alert("檔案儲存成功！已建立 Dense 與 Sparse 索引。");
+            fileInput.value = ""; // 清空選取
+          } else {
+            alert("儲存失敗: " + result.message);
+          }
+        } catch (error) {
+          alert("網路連線異常: " + error.message);
+        } finally {
+          uploadBtn.disabled = false;
+          uploadBtn.innerText = "上傳檔案";
+        }
+      }
+
+      async function clearDatabase() {
+        if (
+          !confirm(
+            "確定要全面清除知識庫嗎？這會刪除所有已上傳的文本、向量庫與 BM25 索引，且無法復原！",
+          )
+        ) {
+          return;
+        }
+
+        const clearBtn = document.getElementById("clear-btn");
+        clearBtn.disabled = true;
+        clearBtn.innerText = "清除中...";
+
+        try {
+          const response = await fetch("/api/clear", {
+            method: "POST",
+          });
+
+          const result = await response.json();
+          if (response.ok && result.status === "success") {
+            alert("知識庫已完全清空！");
+          } else {
+            alert("清除失敗: " + result.message);
+          }
+        } catch (error) {
+          alert("網路連線異常: " + error.message);
+        } finally {
+          clearBtn.disabled = false;
+          clearBtn.innerText = "清除知識庫";
+        }
+      }
+
       async function sendMessage() {
         const inputEl = document.getElementById("question");
         const sendBtn = document.getElementById("send-btn");
@@ -97,7 +214,10 @@
         inputEl.disabled = true;
         sendBtn.disabled = true;
 
-        const agentMessageEl = appendMessage("", "agent");
+        let contextMessageEl = null;
+        let agentMessageEl = null;
+        let hasSplit = false;
+        let receivedBuffer = "";
 
         try {
           const response = await fetch(
@@ -114,12 +234,54 @@
             if (done) break;
 
             const chunk = decoder.decode(value, { stream: true });
-            agentMessageEl.innerText += chunk;
+            receivedBuffer += chunk;
+
+            if (!hasSplit) {
+              const splitterIndex = receivedBuffer.indexOf(
+                "|||CONTEXT_SPLITTER|||",
+              );
+
+              if (splitterIndex !== -1) {
+                const contextPart = receivedBuffer
+                  .substring(0, splitterIndex)
+                  .replace("[SEARCH_RESULTS]\n", "");
+                const agentPart = receivedBuffer.substring(
+                  splitterIndex + "|||CONTEXT_SPLITTER|||".length,
+                );
+
+                if (!contextMessageEl) {
+                  contextMessageEl = appendMessage("", "retrieval-context");
+                }
+                contextMessageEl.innerHTML =
+                  `<span class="context-title">🔍 參考檢索到的本地知識：</span>` +
+                  contextPart;
+
+                agentMessageEl = appendMessage(agentPart, "agent");
+                hasSplit = true;
+              } else {
+                if (!contextMessageEl) {
+                  contextMessageEl = appendMessage("", "retrieval-context");
+                }
+                const displayBuffer = receivedBuffer.replace(
+                  "[SEARCH_RESULTS]\n",
+                  "",
+                );
+                contextMessageEl.innerHTML =
+                  `<span class="context-title">🔍 正在檢索知識庫...</span>` +
+                  displayBuffer;
+              }
+            } else {
+              agentMessageEl.innerText += chunk;
+            }
 
             messagesEl.scrollTop = messagesEl.scrollHeight;
           }
         } catch (error) {
-          agentMessageEl.innerText = "出錯了: " + error.message;
+          if (agentMessageEl) {
+            agentMessageEl.innerText += "\n出錯了：" + error.message;
+          } else {
+            agentMessageEl("出錯了: " + error.message, "agent");
+          }
         } finally {
           inputEl.disabled = false;
           sendBtn.disabled = false;
@@ -131,7 +293,12 @@
         const messagesEl = document.getElementById("messages");
         const msgDiv = document.createElement("div");
         msgDiv.classList.add("message", sender);
-        msgDiv.innerText = text;
+
+        if (sender !== "retrieval-context") {
+          msgDiv.innerText = text;
+        } else {
+          msgDiv.innerHTML = text;
+        }
         messagesEl.appendChild(msgDiv);
         messagesEl.scrollTop = messagesEl.scrollHeight;
         return msgDiv;
