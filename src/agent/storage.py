@@ -7,7 +7,6 @@ from typing import List
 import chromadb
 import jieba
 from chromadb import Documents, EmbeddingFunction, Embeddings
-from langchain_text_splitters import RecursiveCharacterTextSplitter
 from rank_bm25 import BM25Okapi
 from sentence_transformers import SentenceTransformer
 
@@ -125,57 +124,17 @@ class SparseManager:
 
 class RetrievalManager:
     def __init__(self):
-        self.text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=256, chunk_overlap=32
-        )
         self.dense = VectorDBManager()
         self.sparse = SparseManager()
 
-    def store(self, files):
-        if not files:
-            return "Please upload file first"
-
-        new_chunks = []
-        all_metadata = []
-
-        for file in files:
-            filename = Path(file.name).name
-            # shutil.copy(file.name, filename)
-            file_path = file.name
-
-            try:
-                with open(file_path, "r", encoding="utf-8") as f:
-                    file_text = f.read()
-
-                if file_text and file_text.strip():
-                    split_docs = self.text_splitter.split_text(file_text)
-                    vaild_docs = [doc for doc in split_docs if doc.strip()]
-
-                    if vaild_docs:
-                        new_chunks.extend(vaild_docs)
-                        for i in range(len(vaild_docs)):
-                            all_metadata.append({"source": filename, "chunk_index": i})
-                    else:
-                        print(
-                            f"[Warning] File {filename} split, but has no vaild content."
-                        )
-                else:
-                    print(
-                        f"[Warning] File {filename} is empty or only contains spaces."
-                    )
-            except UnicodeDecodeError:
-                return f"Failed to read {filename}: decode error. Please check it is utf-8 format."
-            except Exception as e:
-                return f"Failed to read {filename}: {e}"
-
-        if not new_chunks or len(new_chunks) == 0:
+    def store(self, chunks, metadata):
+        if not chunks or len(chunks) == 0:
             return "Error: can't extract text from all files."
 
-        ids = [str(uuid.uuid4()) for _ in new_chunks]
-
-        if not self.dense.store(new_chunks, all_metadata, ids):
+        ids = [str(uuid.uuid4()) for _ in chunks]
+        if not self.dense.store(chunks, metadata, ids):
             return "Failed to update vector DB."
-        if not self.sparse.store(new_chunks):
+        if not self.sparse.store(chunks):
             return "Failed to update BM25, but successfully update vector DB."
 
         return "Success."

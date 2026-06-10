@@ -101,7 +101,7 @@
       <h2>LangChain Agent 互動介面</h2>
 
       <div id="upload-section">
-        <input type="file" id="file-input" multiple accept=".txt" />
+        <input type="file" id="file-input" multiple accept=".pdf,.txt,.md" />
         <button id="upload-btn" class="upload-btn" onclick="uploadFiles()">
           上傳檔案
         </button>
@@ -253,7 +253,7 @@
                   contextMessageEl = appendMessage("", "retrieval-context");
                 }
                 contextMessageEl.innerHTML =
-                  `<span class="context-title">🔍 參考檢索到的本地知識：</span>` +
+                  `<span class="context-title">參考檢索到的本地知識：</span>` +
                   contextPart;
 
                 agentMessageEl = appendMessage(agentPart, "agent");
@@ -267,7 +267,7 @@
                   "",
                 );
                 contextMessageEl.innerHTML =
-                  `<span class="context-title">🔍 正在檢索知識庫...</span>` +
+                  `<span class="context-title">正在檢索知識庫...</span>` +
                   displayBuffer;
               }
             } else {

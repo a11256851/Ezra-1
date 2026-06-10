@@ -9,7 +9,13 @@ import uvicorn
 from fastapi import FastAPI, File, Query, Request, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 
-from src.agent import LangChainAgentManager, RetrievalManager
+from src.agent import (
+    LangChainAgentManager,
+    Parser,
+    Plain_text_chunker,
+    RetrievalManager,
+    School_rules_chunker,
+)
 
 
 @asynccontextmanager
@@ -19,6 +25,11 @@ async def lifespan(app: FastAPI):
     app.state.agent_manager.warnup()
 
     app.state.retrieval_manager = RetrievalManager()
+
+    app.state.parser = Parser()
+
+    app.state.plain_chunker = Plain_text_chunker()
+    app.state.pdf_chunker = School_rules_chunker()
 
     yield
 
@@ -54,10 +65,18 @@ async def get_web_ui():
 @app.post("/api/store")
 async def store(request: Request, files: List[UploadFile] = File(...)):
     retrieval_manager = request.app.state.retrieval_manager
+    plain_chunker = request.app.state.plain_chunker
+    pdf_chunker = request.app.state.pdf_chunker
+    parser = request.app.state.parser
+
     temp_dir = Path("tmp")
     temp_dir.mkdir(exist_ok=True)
 
     wrapped_files = []
+    needed2parse = []
+    success_count = 0
+
+    result_message = ""
 
     class CompatibleFile:
         def __init__(self, path):
@@ -65,27 +84,72 @@ async def store(request: Request, files: List[UploadFile] = File(...)):
 
     try:
         for file in files:
+            file_ext = Path(file.filename).suffix.lower().lstrip(".")
             temp_file_path = temp_dir / file.filename
             with open(temp_file_path, "wb") as f:
                 f.write(await file.read())
-            wrapped_files.append(CompatibleFile(temp_file_path))
+            if file_ext == "pdf":
+                needed2parse.append(CompatibleFile(temp_file_path))
+            else:  # txt or markdown
+                wrapped_files.append(CompatibleFile(temp_file_path))
 
-        result_message = retrieval_manager.store(wrapped_files)
+        for file in wrapped_files:
+            filename = Path(file.name).name
+            file_path = file.name
+
+            try:
+                with open(file_path, "r", encoding="utf-8") as f:
+                    file_text = f.read()
+
+                plain_metadata, plain_chunks = plain_chunker.chunk(
+                    file_text, filename=filename
+                )
+                chunks = [chunk["content"] for chunk in plain_chunks]
+                metadata = [
+                    {"source": plain_metadata["title"], "article": chunk["article"]}
+                    for chunk in plain_chunks
+                ]
+                if chunks:
+                    msg = retrieval_manager.store(chunks=chunks, metadata=metadata)
+                    if "Success" in msg:
+                        success_count += 1
+            except Exception as e:
+                print(f"Failed to read {filename}: {e}")
+
+        if needed2parse:
+            parsed_raw_contents = parser.parse(files=needed2parse, contexts={})
+            for file_obj, content in zip(needed2parse, parsed_raw_contents):
+                pdf_filename = Path(file_obj.name).name
+                pdf_metadata, pdf_chunks = pdf_chunker.chunk(content)
+
+                chunks = [chunk["content"] for chunk in pdf_chunks]
+                metadata = [
+                    {"source": pdf_metadata["title"], "article": chunk["article"]}
+                    for chunk in pdf_chunks
+                ]
+
+                if chunks:
+                    msg = retrieval_manager.store(chunks=chunks, metadata=metadata)
+                    if "Success" in msg:
+                        success_count += 1
+
+        total_files = len(wrapped_files) + len(needed2parse)
 
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
     finally:
-        for wf in wrapped_files:
-            try:
-                if os.path.exists(wf.name):
-                    os.remove(wf.name)
-            except Exception as ce:
-                print(f"[Warning] Failed to remove temp file {wf.name}: {ce}")
+        for f_list in [wrapped_files, needed2parse]:
+            for f in f_list:
+                try:
+                    if os.path.exists(f.name):
+                        os.remove(f.name)
+                except Exception as ce:
+                    print(f"[Warning] Failed to remove temp file {f.name}: {ce}")
 
     return {
-        "status": "success" if "Success." in result_message else "failed",
-        "message": result_message,
+        "status": "success" if success_count > 0 else "failed",
+        "message": f"Successfully processed {success_count}/{total_files} files.",
     }
 
 

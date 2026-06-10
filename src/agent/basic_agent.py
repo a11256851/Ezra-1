@@ -1,4 +1,5 @@
 import argparse
+import base64
 import json
 import os
 import subprocess
@@ -67,6 +68,43 @@ class LangChainAgentManager:
         ):
             if hasattr(chunk, "content") and chunk.content:
                 yield chunk.content
+
+    def get_img_caption(
+        self, question: str, img_path_or_url: str, thread_id: str = "default-thread"
+    ):
+        config = {"configurable": {"thread_id": thread_id}}
+        if os.path.exists(img_path_or_url):
+            with open(img_path_or_url, "rb") as img_file:
+                encoded_string = base64.b64encode(img_file.read()).decode("utf-8")
+            ext = os.path.splitext(img_path_or_url)[1].replace(".", "")
+            mime_type = (
+                f"image/{ext}"
+                if ext in ["png", "jpg", "jpeg", "webp"]
+                else "image/jpeg"
+            )
+            img_data = f"data:{mime_type};base64,{encoded_string}"
+        else:
+            img_data = img_path_or_url
+        message_content = [
+            {"type": "text", "text": question},
+            {
+                "type": "image_url",
+                "image_url": {"url": img_data},
+            },
+        ]
+        result = self.agent.invoke(
+            {"messages": [HumanMessage(content=message_content)]}, config
+        )
+
+        if isinstance(result, dict) and "messages" in result:
+            messages = result["messages"]
+            if messages:
+                last_msg = messages[-1]
+                if isinstance(last_msg, BaseMessage):
+                    return last_msg.content
+                return str(last_msg)
+
+        return str(result)
 
     def warnup(self):
         print("Warning up LLM model...")
