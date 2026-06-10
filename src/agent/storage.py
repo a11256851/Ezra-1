@@ -2,7 +2,7 @@ import pickle
 import shutil
 import uuid
 from pathlib import Path
-from typing import List
+from typing import Any, Dict, List, Tuple
 
 import chromadb
 import jieba
@@ -16,6 +16,7 @@ CHROMA_PATH = curent_dir / "chromaDB"
 SPARSE_PATH = curent_dir / "sparse"
 BM25_PATH = SPARSE_PATH / "bm25_index.pkl"
 CORPUS_PATH = SPARSE_PATH / "corpus_list.pkl"
+METADATA_PATH = SPARSE_PATH / "metadaat_list.pkl"
 
 
 class E5EmbeddingFunction(EmbeddingFunction):
@@ -61,20 +62,23 @@ class VectorDBManager:
             return False
         return True
 
-    def retrieve(self, query: str, topK: int = 5) -> List[str]:
+    def retrieve(
+        self, query: str, topK: int = 5
+    ) -> Tuple[List[str], List[Dict[str, Any]]]:
         query_vec = self.embedding_function.encode_queries([query])
         results = self.collection.query(
             query_embeddings=query_vec,
             n_results=topK,
         )
-        if results["documents"]:
-            return results["documents"][0]
-        return []
+        if results["documents"] and results["documents"][0]:
+            return results["documents"][0], results["documents"][0]
+        return [], []
 
 
 class SparseManager:
     def __init__(self):
         self._chunks = []
+        self._metadatas = []
         self._bm25 = None
         SPARSE_PATH.mkdir(parents=True, exist_ok=True)
 
@@ -84,6 +88,8 @@ class SparseManager:
                     self._bm25 = pickle.load(f)
                 with open(CORPUS_PATH, "rb") as f:
                     self._chunks = pickle.load(f)
+                with open(METADATA_PATH, "rb") as f:
+                    self._metadatas = pickle.load(f)
                 print(
                     f"[SparseDB] Loaded existing BM25 index with {len(self._chunks)} chunks."
                 )
@@ -105,21 +111,32 @@ class SparseManager:
                 pickle.dump(self._bm25, f)
             with open(CORPUS_PATH, "wb") as f:
                 pickle.dump(self._chunks, f)
+            with open(METADATA_PATH, "wb") as f:
+                pickle.dump(self._metadatas, f)
             print(f"[SparseDB] BM25 index successfully updated and saved.")
         except Exception as e:
             print(f"[Error][SparseDB] Failed to update BM25: {e}")
             return False
         return True
 
-    def retrieve(self, query: str, topK: int = 5) -> List[str]:
+    def retrieve(
+        self, query: str, topK: int = 5
+    ) -> Tuple[List[str], List[Dict[str, Any]]]:
         if not self._bm25:
-            return []
+            return [], []
         tokenized_query = list(jieba.cut(query))
         scores = self._bm25.get_scores(tokenized_query)
-        rank = sorted(zip(self._chunks, scores), key=lambda x: x[1], reverse=True)[
-            :topK
-        ]
-        return [chunk for chunk, score in rank if score > 0]
+        rank = sorted(
+            zip(self._chunks, self._metadatas, scores), key=lambda x: x[2], reverse=True
+        )[:topK]
+
+        res_chunks = []
+        res_sources = []
+        for chunk, meta, score in rank:
+            if score > 0:
+                res_chunks.append(chunk)
+                res_sources.append(meta)
+        return res_chunks, res_sources
 
 
 class RetrievalManager:
@@ -140,26 +157,40 @@ class RetrievalManager:
         return "Success."
 
     @staticmethod
-    def _reciprocal_rank_fusion(*ranked_lists, k: int = 60) -> List[str]:
+    def _reciprocal_rank_fusion(
+        ranked_lists: List[Tuple[List[str], List[Dict]]], k: int = 60
+    ) -> Tuple[List[str], List[Dict]]:
         scores = {}
-        for rl in ranked_lists:
-            for rank, doc_content in enumerate(rl, start=1):
+        source_map = {}
+
+        for chunks, sources in ranked_lists:
+            for rank, (doc_content, source) in enumerate(zip(chunks, sources), start=1):
                 if doc_content not in scores:
                     scores[doc_content] = 0
+                    source_map[doc_content] = source
                 scores[doc_content] += 1.0 / (k + rank)
         fused = sorted(scores.items(), key=lambda x: x[1], reverse=True)
-        return [doc for doc, score in fused]
+        fused_chunks = [doc for doc, score in fused]
+        fused_sources = [source_map[doc] for doc in fused_chunks]
+        return fused_chunks, fused_sources
 
-    def retrieve(self, message: str, topK: int = 5) -> str:
-        relevant_chunks_sparse = self.sparse.retrieve(query=message, topK=topK)
-        relevant_chunks_dense = self.dense.retrieve(query=message, topK=topK)
+    def retrieve(
+        self, message: str, topK: int = 5
+    ) -> Tuple[List[str], List[Dict[str, Any]]]:
+        relevant_chunks_sparse, source_sparse = self.sparse.retrieve(
+            query=message, topK=topK
+        )
+        relevant_chunks_dense, source_dense = self.dense.retrieve(
+            query=message, topK=topK
+        )
 
-        relevant_chunks = "\n\n".join(
-            self._reciprocal_rank_fusion(relevant_chunks_sparse, relevant_chunks_dense)[
-                :topK
+        relevant_chunks, sources = self._reciprocal_rank_fusion(
+            [
+                (relevant_chunks_sparse, source_sparse),
+                (relevant_chunks_dense, source_dense),
             ]
         )
-        return relevant_chunks
+        return relevant_chunks[:topK], sources[:topK]
 
     def clear(self) -> str:
         errors = []
@@ -178,12 +209,15 @@ class RetrievalManager:
 
         try:
             self.sparse._chunks = []
+            self.sparse._metadatas = []
             self.sparse._bm25 = None
 
             if BM25_PATH.exists():
                 BM25_PATH.unlink()
             if CORPUS_PATH.exists():
                 CORPUS_PATH.unlink()
+            if METADATA_PATH.exists():
+                METADATA_PATH.unlink()
 
             print("[SparseDB] BM25 index and corpus files deleted successfully.")
         except Exception as e:

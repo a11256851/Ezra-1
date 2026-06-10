@@ -184,7 +184,8 @@ async def chat_stream(
     """.strip()
 
     try:
-        context = retrieval_manager.retrieve(message=question, topK=3)
+        relevant_chunks, sources = retrieval_manager.retrieve(message=question, topK=3)
+        context = "\n\n".join(relevant_chunks)
     except Exception as e:
         context = f"Failed to Retrieve: {e}"
 

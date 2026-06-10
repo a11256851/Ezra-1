@@ -14,11 +14,13 @@ from langgraph.checkpoint.memory import InMemorySaver
 
 
 class LangChainAgentManager:
-    def __init__(self):
+    def __init__(
+        self, system_prompt: str = "你是 Langchain Agent ，請盡你所能回答使用者問題。"
+    ):
         print("Initializing LangChainAgentManager...")
         self.llm = self._create_llm()
         self.checkpointer = InMemorySaver()
-        self.agent = self._create_agent()
+        self.agent = self._create_agent(system_prompt)
 
     def _create_llm(self) -> ChatOllama:
         base_url = os.getenv("OLLAMA_BASE_URL")
@@ -30,13 +32,13 @@ class LangChainAgentManager:
 
         return ChatOllama(**kwargs)
 
-    def _create_agent(self) -> Any:
+    def _create_agent(self, system_prompt) -> Any:
         tools = []
         agent = create_agent(
             self.llm,
             tools,
             checkpointer=self.checkpointer,
-            system_prompt=("你是 Langchain Agent ，請盡你所能回答使用者問題。"),
+            system_prompt=(system_prompt),
         )
         return agent
 
