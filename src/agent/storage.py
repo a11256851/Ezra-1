@@ -71,7 +71,7 @@ class VectorDBManager:
             n_results=topK,
         )
         if results["documents"] and results["documents"][0]:
-            return results["documents"][0], results["documents"][0]
+            return results["documents"][0], results["metadatas"][0]
         return [], []
 
 

@@ -44,13 +44,22 @@ class School_rules_chunker(ChunkingStrategy):
         chunks = []
 
         lines = text.split("\n")
+        metadata["title"] = "Untitled"
 
-        title_line = lines[0].replace("`", "")
-        title_match = re.search(r"^##\s*(.*)", title_line)
-        if title_match:
-            metadata["title"] = title_match.group(1).strip()
-        else:
-            metadata["title"] = "Untitled"
+        start_idx = 0
+        for idx, line in enumerate(lines):
+            cleaned_line = line.strip().replace("`", "")
+            if not cleaned_line:
+                continue
+
+            title_match = re.search(r"^#+\s*(.*)", cleaned_line)
+            if title_match:
+                metadata["title"] = title_match.group(1).strip()
+            else:
+                metadata["title"] = cleaned_line
+
+            start_idx = idx + 1
+            break
 
         dates = []
         date_pattern = re.compile(r"^\s*([`\d一二三四五六七八九十百]+.*年.*日.*通過.*)")

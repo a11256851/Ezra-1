@@ -68,6 +68,9 @@ class Exp1(Experiment):
             with open(self.test_set, "r") as f:
                 qa_dataset = json.load(f)
                 print(f"dataset load successful. total {len(qa_dataset)} Q&A.\n")
+
+            # test_subset = dict(list(qa_dataset.items())[:3])
+
             for item_id, data in tqdm(qa_dataset.items(), desc="LLM Judge progress"):
                 question = data.get("q", "no question")
                 answer = data.get("a", "no answer")
