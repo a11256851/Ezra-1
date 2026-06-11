@@ -1,6 +1,6 @@
 # Ezra/> uv run python -m experiments.run_eval
 
-from experiments.exp1 import Exp1
+from experiments.exps.exp1 import Exp1
 
 if __name__ == "__main__":
     exp_list = [Exp1()]

@@ -8,7 +8,7 @@ from typing import List
 from langchain_core.messages import HumanMessage
 from tqdm.autonotebook import tqdm
 
-from experiments.exp import Experiment
+from experiments.exps.exp import Experiment
 from src.agent import (
     LangChainAgentManager,
     Parser,

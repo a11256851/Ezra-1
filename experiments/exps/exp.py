@@ -15,7 +15,7 @@ from src.agent import (
 
 class Experiment:
     def __init__(self):
-        self.experiments_dir = Path(__file__).parent
+        self.experiments_dir = Path(__file__).parent.parent
         self.data_dir = self.experiments_dir / "data"
         self.test_set = self.data_dir / "test1.json"  # default
         self.results_dir = self.experiments_dir / "results"
