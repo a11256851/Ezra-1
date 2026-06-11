@@ -59,7 +59,12 @@ app = FastAPI(title="LangChain Agent Web UI", lifespan=lifespan)
 
 @app.get("/")
 async def get_web_ui():
-    return FileResponse("index.html")
+    return FileResponse("pages/index.html")
+
+
+@app.get("/editor")
+async def get_web_ui():
+    return FileResponse("pages/editor.html")
 
 
 @app.post("/api/store")

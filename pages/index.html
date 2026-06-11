@@ -1,0 +1,786 @@
+<!doctype html>
+<html lang="zh-TW">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LangChain Agent</title>
+  <style>
+    :root {
+      --bg-color: #f0f4f9;
+      --chat-bg: #ffffff;
+      --sidebar-bg: #f0f4f9;
+      --primary-color: #1a73e8;
+      --text-main: #1f1f1f;
+      --text-muted: #444746;
+      --user-msg-bg: #e3e3e3;
+      --agent-msg-bg: #ffffff;
+      --border-color: #e0e0e0;
+      --border-radius-lg: 24px;
+      --border-radius-md: 12px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--chat-bg);
+      color: var(--text-main);
+      margin: 0;
+      height: 100vh;
+      display: flex;
+      flex-direction: row;
+      overflow: hidden;
+    }
+
+    /* Sidebar Styles */
+    #sidebar {
+      width: 280px;
+      background-color: var(--sidebar-bg);
+      display: flex;
+      flex-direction: column;
+      padding: 16px;
+      transition: width 0.3s ease;
+    }
+
+    .sidebar-top {
+      margin-bottom: 24px;
+    }
+
+    #sidebar.collapsed {
+      width: 0;
+      padding: 0;
+      overflow: hidden;
+    }
+
+    .sidebar-toggle-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 8px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .sidebar-toggle-btn:hover {
+      background-color: #e1e5ea;
+    }
+
+    .history-section {
+      margin-top: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .history-item {
+      padding: 10px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      color: var(--text-main);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      transition: background-color 0.2s ease;
+    }
+
+    .history-item:hover {
+      background-color: #e1e5ea;
+    }
+
+    .history-item.active {
+      background-color: #d3e3fd;
+      color: #041e49;
+      font-weight: 500;
+    }
+
+    .new-chat-btn {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background-color: #d3e3fd;
+      color: #041e49;
+      border: none;
+      padding: 16px;
+      border-radius: 16px;
+      cursor: pointer;
+      font-size: 1rem;
+      font-weight: 500;
+      width: fit-content;
+      transition: background-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .new-chat-btn:hover {
+      background-color: #b9d5fc;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+
+    .sidebar-middle {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* 預留的資料可視化區塊 */
+    .db-vision-section {
+      background-color: #e9eef6;
+      border-radius: 12px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .section-title {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .db-search-box {
+      display: flex;
+      background-color: #ffffff;
+      border-radius: 8px;
+      padding: 4px 8px;
+      border: 1px solid var(--border-color);
+    }
+
+    .db-search-box input {
+      flex: 1;
+      border: none;
+      outline: none;
+      background: transparent;
+      font-size: 0.9rem;
+      width: 100%;
+    }
+
+    .db-visualization-area {
+      height: 150px;
+      border: 1px dashed #c2c7cf;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      color: #70757a;
+      font-size: 0.85rem;
+    }
+
+    .sidebar-bottom {
+      padding-top: 16px;
+    }
+
+    .menu-btn {
+      display: block;
+      width: 100%;
+      text-align: left;
+      background-color: transparent;
+      border: none;
+      padding: 12px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.95rem;
+      color: var(--text-main);
+      transition: background-color 0.2s ease;
+    }
+
+    .menu-btn:hover {
+      background-color: #e1e5ea;
+    }
+
+    .btn-danger {
+      color: #d93025;
+    }
+
+    .btn-danger:hover {
+      background-color: #fce8e6;
+    }
+
+    /* Main Content Styles */
+    #main-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background-color: var(--chat-bg);
+      position: relative;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 24px;
+      background-color: var(--chat-bg);
+    }
+
+    .header-title {
+      font-size: 1.25rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      margin: 0;
+    }
+
+    .lang-toggle-btn {
+      background-color: var(--sidebar-bg);
+      border: none;
+      color: var(--text-main);
+      padding: 8px 16px;
+      border-radius: 20px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      transition: background-color 0.2s ease;
+    }
+
+    .lang-toggle-btn:hover {
+      background-color: #e1e5ea;
+    }
+
+    #chat-wrapper {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      max-width: 850px;
+      margin: 0 auto;
+      width: 100%;
+      height: 100%;
+    }
+
+    #messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+      scroll-behavior: smooth;
+    }
+
+    .message-wrapper {
+      display: flex;
+      flex-direction: column;
+      max-width: 85%;
+    }
+
+    .message-wrapper.user {
+      align-self: flex-end;
+    }
+
+    .message-wrapper.agent {
+      align-self: flex-start;
+    }
+
+    .message {
+      padding: 12px 16px;
+      border-radius: var(--border-radius-md);
+      line-height: 1.6;
+      word-wrap: break-word;
+    }
+
+    .user .message {
+      background-color: var(--user-msg-bg);
+      border-bottom-right-radius: 4px;
+    }
+
+    .agent .message {
+      background-color: var(--agent-msg-bg);
+      border: 1px solid var(--border-color);
+      border-bottom-left-radius: 4px;
+      white-space: pre-wrap;
+    }
+
+    .retrieval-context {
+      background-color: #f8f9fa;
+      color: var(--text-muted);
+      font-size: 0.85em;
+      padding: 12px;
+      border-radius: 8px;
+      border-left: 4px solid #dadce0;
+      margin-bottom: 12px;
+      white-space: pre-wrap;
+    }
+
+    .context-title {
+      font-weight: 600;
+      display: block;
+      margin-bottom: 8px;
+      color: var(--text-main);
+    }
+
+    #input-container {
+      padding: 16px 24px 32px 24px;
+      background-color: var(--chat-bg);
+    }
+
+    .input-box {
+      display: flex;
+      align-items: center;
+      background-color: var(--sidebar-bg);
+      border-radius: var(--border-radius-lg);
+      padding: 12px 16px;
+      border: 1px solid transparent;
+      gap: 12px;
+    }
+
+    .input-box:focus-within {
+      background-color: var(--chat-bg);
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      border-color: #d2d2d2;
+    }
+
+    #file-input {
+      display: none;
+    }
+
+    .icon-btn {
+      background: none;
+      border: none;
+      padding: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-muted);
+      border-radius: 50%;
+      cursor: pointer;
+    }
+
+    .icon-btn:hover {
+      background-color: #e1e5ea;
+    }
+
+    #question {
+      flex: 1;
+      border: none;
+      outline: none;
+      padding: 8px 0;
+      font-size: 1rem;
+      background-color: transparent;
+      font-family: inherit;
+    }
+
+    .send-btn-text {
+      font-weight: 500;
+      color: var(--primary-color);
+    }
+
+    .send-btn-text:disabled {
+      color: #9aa0a6;
+    }
+  </style>
+</head>
+
+<body>
+  <nav id="sidebar">
+    <div class="sidebar-top">
+      <button class="new-chat-btn" onclick="resetChat()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round">
+          <line x1="12" y1="5" x2="12" y2="19"></line>
+          <line x1="5" y1="12" x2="19" y2="12"></line>
+        </svg>
+        <span id="reset-btn-text">重整對話</span>
+      </button>
+    </div>
+
+    <div class="sidebar-middle">
+      <div class="db-vision-section">
+        <span class="section-title" id="sidebar-vision-title">相關資料搜尋</span>
+        <div class="db-search-box">
+          <input type="text" id="db-search-input" placeholder="檢索知識庫..." />
+          <button class="icon-btn" style="padding: 4px;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+          </button>
+        </div>
+        <div class="db-visualization-area">
+          <span id="vision-placeholder">保留作為圖表或資料視覺化用途</span>
+        </div>
+      </div>
+
+      <div class="history-section">
+        <span class="section-title" id="sidebar-history-title">歷史紀錄</span>
+        <div id="history-list"></div>
+      </div>
+    </div>
+
+    <div class="sidebar-bottom">
+      <button id="clear-btn" class="menu-btn btn-danger" onclick="clearDatabase()">
+        <span id="clear-btn-text">清除知識庫</span>
+      </button>
+    </div>
+  </nav>
+
+  <main id="main-content">
+    <header>
+      <div style="display: flex; align-items: center; gap: 16px;">
+        <button class="sidebar-toggle-btn" onclick="toggleSidebar()">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <line x1="3" y1="12" x2="21" y2="12"></line>
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <line x1="3" y1="18" x2="21" y2="18"></line>
+          </svg>
+        </button>
+        <h1 class="header-title" id="ui-title">LangChain Agent</h1>
+      </div>
+      <button id="lang-btn" class="lang-toggle-btn" onclick="toggleLanguage()">EN</button>
+    </header>
+
+    <div id="chat-wrapper">
+      <div id="messages"></div>
+
+      <div id="input-container">
+        <div class="input-box">
+          <input type="file" id="file-input" multiple accept=".pdf,.txt,.md" onchange="handleFileSelect(event)" />
+          <button id="upload-btn" class="icon-btn" onclick="document.getElementById('file-input').click()" title="上傳檔案">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path
+                d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48">
+              </path>
+            </svg>
+          </button>
+
+          <input type="text" id="question" placeholder="輸入您的問題..."
+            onkeydown="if (event.key === 'Enter') sendMessage();" />
+
+          <button id="send-btn" class="icon-btn" onclick="sendMessage()">
+            <span class="send-btn-text" id="send-text">發送</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    let threadId = generateThreadId();
+    let currentLang = "zh-TW";
+
+    const i18n = {
+      "zh-TW": {
+        title: "LangChain Agent",
+        langBtn: "EN",
+        resetBtn: "重整對話",
+        clearBtn: "清除知識庫",
+        placeholder: "輸入您的問題...",
+        sendBtn: "發送",
+        uploadTitle: "上傳檔案",
+        alertNoFile: "請先選取要上傳的檔案！",
+        uploadSuccess: "檔案儲存成功！已建立 Dense 與 Sparse 索引。",
+        uploadFail: "儲存失敗: ",
+        networkErr: "網路連線異常: ",
+        clearConfirm: "確定要全面清除知識庫嗎？這會刪除所有已上傳的文本、向量庫與 BM25 索引，且無法復原！",
+        clearSuccess: "知識庫已完全清空！",
+        clearFail: "清除失敗: ",
+        retrieving: "正在檢索知識庫...",
+        retrieved: "參考檢索到的本地知識：",
+        error: "出錯了：",
+        visionTitle: "相關資料搜尋",
+        visionSearchPlaceholder: "檢索知識庫...",
+        visionPlaceholderText: "保留作為圖表或資料視覺化用途",
+        historyTitle: "歷史紀錄"
+      },
+      "en": {
+        title: "LangChain Agent",
+        langBtn: "中文",
+        resetBtn: "New Chat",
+        clearBtn: "Clear Database",
+        placeholder: "Ask a question...",
+        sendBtn: "Send",
+        uploadTitle: "Upload Files",
+        alertNoFile: "Please select files to upload!",
+        uploadSuccess: "Files stored successfully! Dense and Sparse indexes created.",
+        uploadFail: "Storage failed: ",
+        networkErr: "Network error: ",
+        clearConfirm: "Are you sure you want to clear the knowledge base completely? This action cannot be undone!",
+        clearSuccess: "Knowledge base cleared successfully!",
+        clearFail: "Clear failed: ",
+        retrieving: "Retrieving knowledge base...",
+        retrieved: "Retrieved local context:",
+        error: "Error: ",
+        visionTitle: "Data Search & Vision",
+        visionSearchPlaceholder: "Search database...",
+        visionPlaceholderText: "Reserved for data visualization",
+        historyTitle: "Chat History"
+      }
+    };
+
+    function generateThreadId() {
+      return "web-session-" + Math.random().toString(36).substring(2, 11);
+    }
+
+    let chatHistory = JSON.parse(localStorage.getItem("chatHistory") || "{}");
+
+    function toggleSidebar() {
+      document.getElementById("sidebar").classList.toggle("collapsed");
+    }
+
+    function renderHistoryList() {
+      const list = document.getElementById("history-list");
+      list.innerHTML = "";
+      Object.keys(chatHistory).reverse().forEach(id => {
+        const thread = chatHistory[id];
+        const div = document.createElement("div");
+        div.className = `history-item ${id === threadId ? "active" : ""}`;
+        div.innerText = thread.title || "新對話";
+        div.onclick = () => loadThread(id);
+        list.appendChild(div);
+      });
+    }
+
+    function loadThread(id) {
+      threadId = id;
+      document.getElementById("messages").innerHTML = "";
+      const thread = chatHistory[id];
+      if (thread && thread.messages) {
+        thread.messages.forEach(msg => {
+          appendMessage(msg.text, msg.sender, false);
+        });
+      }
+      renderHistoryList();
+    }
+
+    function saveMessageToStorage(text, sender) {
+      if (!chatHistory[threadId]) {
+        chatHistory[threadId] = {
+          title: sender === "user" ? text.substring(0, 15) + "..." : "新對話",
+          messages: []
+        };
+      }
+      chatHistory[threadId].messages.push({sender, text});
+      localStorage.setItem("chatHistory", JSON.stringify(chatHistory));
+      renderHistoryList();
+    }
+
+    function updateUI() {
+      const t = i18n[currentLang];
+      document.getElementById("ui-title").innerText = t.title;
+      document.getElementById("lang-btn").innerText = t.langBtn;
+      document.getElementById("reset-btn-text").innerText = t.resetBtn;
+      document.getElementById("clear-btn-text").innerText = t.clearBtn;
+      document.getElementById("question").placeholder = t.placeholder;
+      document.getElementById("send-text").innerText = t.sendBtn;
+      document.getElementById("upload-btn").title = t.uploadTitle;
+
+      // Sidebar elements
+      document.getElementById("sidebar-vision-title").innerText = t.visionTitle;
+      document.getElementById("db-search-input").placeholder = t.visionSearchPlaceholder;
+      document.getElementById("vision-placeholder").innerText = t.visionPlaceholderText;
+      document.getElementById("sidebar-history-title").innerText = t.historyTitle;
+    }
+
+    function toggleLanguage() {
+      currentLang = currentLang === "zh-TW" ? "en" : "zh-TW";
+      updateUI();
+    }
+
+    function resetChat() {
+      document.getElementById("messages").innerHTML = "";
+      threadId = generateThreadId();
+      renderHistoryList();
+      document.getElementById("question").focus();
+    }
+
+    async function handleFileSelect(event) {
+      const files = event.target.files;
+      if (files.length === 0) return;
+
+      await uploadFiles(files);
+      event.target.value = "";
+    }
+
+    async function uploadFiles(files) {
+      const t = i18n[currentLang];
+      const uploadBtn = document.getElementById("upload-btn");
+
+      const formData = new FormData();
+      for (let i = 0; i < files.length; i++) {
+        formData.append("files", files[i]);
+      }
+
+      uploadBtn.disabled = true;
+
+      try {
+        const response = await fetch("/api/store", {
+          method: "POST",
+          body: formData,
+        });
+
+        const result = await response.json();
+        if (response.ok && result.status === "success") {
+          alert(t.uploadSuccess);
+        } else {
+          alert(t.uploadFail + result.message);
+        }
+      } catch (error) {
+        alert(t.networkErr + error.message);
+      } finally {
+        uploadBtn.disabled = false;
+      }
+    }
+
+    async function clearDatabase() {
+      const t = i18n[currentLang];
+      if (!confirm(t.clearConfirm)) {
+        return;
+      }
+
+      const clearBtn = document.getElementById("clear-btn");
+      clearBtn.disabled = true;
+
+      try {
+        const response = await fetch("/api/clear", {
+          method: "POST",
+        });
+
+        const result = await response.json();
+        if (response.ok && result.status === "success") {
+          alert(t.clearSuccess);
+        } else {
+          alert(t.clearFail + result.message);
+        }
+      } catch (error) {
+        alert(t.networkErr + error.message);
+      } finally {
+        clearBtn.disabled = false;
+      }
+    }
+
+    async function sendMessage() {
+      const t = i18n[currentLang];
+      const inputEl = document.getElementById("question");
+      const sendBtn = document.getElementById("send-btn");
+      const messagesEl = document.getElementById("messages");
+      const question = inputEl.value.trim();
+
+      if (!question) return;
+
+      appendMessage(question, "user");
+      inputEl.value = "";
+      inputEl.disabled = true;
+      sendBtn.disabled = true;
+
+      let contextMessageEl = null;
+      let agentMessageContentEl = null;
+      let hasSplit = false;
+      let receivedBuffer = "";
+
+      try {
+        const response = await fetch(
+          `/api/chat?question=${encodeURIComponent(question)}&thread_id=${threadId}`,
+        );
+
+        if (!response.ok) throw new Error(t.networkErr);
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder("utf-8");
+
+        const agentMsgWrapper = createMessageWrapper("agent");
+
+        while (true) {
+          const {done, value} = await reader.read();
+          if (done) break;
+
+          const chunk = decoder.decode(value, {stream: true});
+          receivedBuffer += chunk;
+
+          if (!hasSplit) {
+            const splitterIndex = receivedBuffer.indexOf("|||CONTEXT_SPLITTER|||");
+
+            if (splitterIndex !== -1) {
+              const contextPart = receivedBuffer
+                .substring(0, splitterIndex)
+                .replace("[SEARCH_RESULTS]\n", "");
+              const agentPart = receivedBuffer.substring(
+                splitterIndex + "|||CONTEXT_SPLITTER|||".length,
+              );
+
+              if (!contextMessageEl && contextPart.trim()) {
+                contextMessageEl = document.createElement("div");
+                contextMessageEl.className = "retrieval-context";
+                agentMsgWrapper.appendChild(contextMessageEl);
+              }
+
+              if (contextMessageEl) {
+                contextMessageEl.innerHTML = `<span class="context-title">${t.retrieved}</span>${contextPart}`;
+              }
+
+              agentMessageContentEl = document.createElement("div");
+              agentMessageContentEl.className = "message";
+              agentMessageContentEl.innerText = agentPart;
+              agentMsgWrapper.appendChild(agentMessageContentEl);
+
+              hasSplit = true;
+            } else {
+              if (!contextMessageEl) {
+                contextMessageEl = document.createElement("div");
+                contextMessageEl.className = "retrieval-context";
+                agentMsgWrapper.appendChild(contextMessageEl);
+              }
+              const displayBuffer = receivedBuffer.replace("[SEARCH_RESULTS]\n", "");
+              contextMessageEl.innerHTML = `<span class="context-title">${t.retrieving}</span>${displayBuffer}`;
+            }
+          } else {
+            agentMessageContentEl.innerText += chunk;
+          }
+
+          messagesEl.scrollTop = messagesEl.scrollHeight;
+        }
+        if (agentMessageContentEl && agentMessageContentEl.innerText.trim()) {
+          saveMessageToStorage(agentMessageContentEl.innerText, "agent");
+        }
+      } catch (error) {
+        if (agentMessageContentEl) {
+          agentMessageContentEl.innerText += "\n" + t.error + error.message;
+        } else {
+          appendMessage(t.error + error.message, "agent");
+        }
+      } finally {
+        inputEl.disabled = false;
+        sendBtn.disabled = false;
+        inputEl.focus();
+      }
+    }
+
+    function createMessageWrapper(sender) {
+      const messagesEl = document.getElementById("messages");
+      const wrapperDiv = document.createElement("div");
+      wrapperDiv.classList.add("message-wrapper", sender);
+      messagesEl.appendChild(wrapperDiv);
+      return wrapperDiv;
+    }
+
+    function appendMessage(text, sender, save = true) {
+      const wrapperDiv = createMessageWrapper(sender);
+      const msgDiv = document.createElement("div");
+      msgDiv.classList.add("message");
+      msgDiv.innerText = text;
+      wrapperDiv.appendChild(msgDiv);
+
+      const messagesEl = document.getElementById("messages");
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+
+      if (save && (sender === "user" || sender === "agent")) {
+        saveMessageToStorage(text, sender);
+      }
+      return msgDiv;
+    }
+
+    // Initialize
+    updateUI();
+    renderHistoryList();
+  </script>
+</body>
+
+</html>
