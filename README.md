@@ -1,6 +1,6 @@
 # Ezra
 
-Ezra is a **RAG (Retrieval-Augmented Generation) QA System** designed for intelligent document-based questioning and answering. It leverages Ollama for local LLM inference and Hugging Face for embedding/generation models.
+Ezra is a **RAG (Retrieval-Augmented Generation) QA System** designed for intelligent document-based question answering. It leverages Ollama for local LLM inference and Hugging Face for embedding and generation models.
 
 ## Prerequisites
 
@@ -28,8 +28,8 @@ If you are using Arch Linux (or any system running the Fish shell), you can conf
 
 ```shell
 # Set variables globally and export them
-set -Ux HF_TOKEN "your hugging face access token"
-set -Ux OLLAMA_MODEL "which model do you wanted to run"
+set -Ux HF_TOKEN "your_hugging_face_access_token"
+set -Ux OLLAMA_MODEL "the_model_you_want_to_run"
 ```
 
 Note on Fish Shell Flags:
@@ -56,6 +56,14 @@ To execute the evaluation scripts and benchmarks, use:
 uv run python -m experiments.run_eval
 ```
 
+### Running Analysis
+
+To execute the analysis scripts, use:
+
+```shell
+uv run python -m experiments.analysis.analysis[\d]
+```
+
 ## Development
 
 This project uses pre-commit hooks to maintain code quality and formatting standards.
@@ -63,7 +71,7 @@ This project uses pre-commit hooks to maintain code quality and formatting stand
 To set up the git hook scripts and run them against your files:
 
 ```shell
-# Install the git hook scripts
+# Install the Git hook scripts
 uv run pre-commit install
 
 # Run checks against all files manually
