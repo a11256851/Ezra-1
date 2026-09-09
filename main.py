@@ -69,14 +69,17 @@ async def get_web_ui():
 
 @app.post("/api/store")
 async def store(request: Request, files: List[UploadFile] = File(...)):
+    # 從 FastAPI 的 application state 取得啟動時建立的處理元件。
     retrieval_manager = request.app.state.retrieval_manager
     plain_chunker = request.app.state.plain_chunker
     pdf_chunker = request.app.state.pdf_chunker
     parser = request.app.state.parser
 
+    # 所有上傳檔案先寫入暫存目錄，方便既有 parser 以檔案路徑讀取。
     temp_dir = Path("tmp")
     temp_dir.mkdir(exist_ok=True)
 
+    # 純文字檔直接讀取；PDF 則交給 parser 先轉成可切分的文字內容。
     wrapped_files = []
     needed2parse = []
     success_count = 0
@@ -88,6 +91,7 @@ async def store(request: Request, files: List[UploadFile] = File(...)):
             self.name = str(path)
 
     try:
+        # 先保存所有上傳檔案，並依副檔名分派到不同處理流程。
         for file in files:
             file_ext = Path(file.filename).suffix.lower().lstrip(".")
             temp_file_path = temp_dir / file.filename
@@ -98,6 +102,7 @@ async def store(request: Request, files: List[UploadFile] = File(...)):
             else:  # txt or markdown
                 wrapped_files.append(CompatibleFile(temp_file_path))
 
+        # 處理純文字與 Markdown：讀取文字後切成 chunks，再寫入向量資料庫。
         for file in wrapped_files:
             filename = Path(file.name).name
             file_path = file.name
@@ -122,9 +127,23 @@ async def store(request: Request, files: List[UploadFile] = File(...)):
                 print(f"Failed to read {filename}: {e}")
 
         if needed2parse:
+            # PDF 會在這裡直接轉成 Markdown、處理圖片，並由 parser 印出結果。
+            print(f"\n===== Start Parsing {len(needed2parse)} PDF Files =====\n")
             parsed_raw_contents = parser.parse(files=needed2parse, contexts={})
+
+            if isinstance(parsed_raw_contents, str):
+                print(f"Error occurred while parsing PDF files: {parsed_raw_contents}")
+                return {"status": "error", "message": parsed_raw_contents}
+
+            for file_obj, markdown in zip(needed2parse, parsed_raw_contents):
+                pdf_filename = Path(file_obj.name).name
+                print(f"\n===== Markdown Output: {pdf_filename} =====\n")
+                print(markdown)
+                print(f"\n===== End Markdown Output: {pdf_filename} =====\n")
+
             for file_obj, content in zip(needed2parse, parsed_raw_contents):
                 pdf_filename = Path(file_obj.name).name
+                print(f"===== Processing PDF: {pdf_filename} =====")
                 pdf_metadata, pdf_chunks = pdf_chunker.chunk(content)
 
                 chunks = [chunk["content"] for chunk in pdf_chunks]
@@ -141,9 +160,11 @@ async def store(request: Request, files: List[UploadFile] = File(...)):
         total_files = len(wrapped_files) + len(needed2parse)
 
     except Exception as e:
+        # 上傳或批次處理發生未預期錯誤時，回傳 API 錯誤訊息。
         return {"status": "error", "message": str(e)}
 
     finally:
+        # 不論成功或失敗，都刪除本次請求建立的暫存檔。
         for f_list in [wrapped_files, needed2parse]:
             for f in f_list:
                 try:

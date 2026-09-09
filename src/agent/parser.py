@@ -3,6 +3,7 @@ import pathlib
 import pickle
 import re
 import shutil
+import traceback
 from io import BytesIO
 from pathlib import Path
 from threading import Thread
@@ -10,7 +11,7 @@ from typing import Dict, List, Tuple
 
 import jieba
 import pymupdf4llm
-import pymupdf.layout
+#import pymupdf.layout
 import torch
 from PIL import Image
 from transformers import (
@@ -37,6 +38,7 @@ img_output_dir = tmp_dir / "imgs"
 class Parser:
     def __init__(self):
         self.agent = LangChainAgentManager()
+        img_output_dir.mkdir(parents=True, exist_ok=True)
 
     def _pdf2markdown(self, doc: str, img_output_dir: str) -> str:
         md_text = pymupdf4llm.to_markdown(
@@ -44,7 +46,7 @@ class Parser:
             write_images=True,
             image_path=img_output_dir,
             image_format="png",
-            dpi=300,
+            dpi=150,
             # header=False,  # do not include header in output
             # footer=False,  # do not include footer in output
             # NOTE using OCR should install https://github.com/tesseract-ocr/tesseract first
@@ -75,6 +77,9 @@ class Parser:
             file_path = file.name
 
             try:
+                if not os.path.isfile(file_path) or os.path.getsize(file_path) == 0:
+                    raise ValueError("PDF file is missing or empty")
+
                 md_text = self._pdf2markdown(file_path, img_output_dir)
                 caption = "This is a caption text for the image."
                 pattern = r"!\[.*?\]\((.*?)\)"
@@ -89,8 +94,10 @@ class Parser:
                     return f"![Image]({img_path})\n*({caption})*\n\n"
 
                 content = re.sub(pattern, _process_caption, md_text)
+                print(f"\n===== Markdown: {filename} =====\n{content}\n===== End Markdown: {filename} =====\n")
                 raw_contents.append(content)
             except Exception as e:
+                traceback.print_exc()
                 return f"Failed to read {filename}: {e}"
 
         return raw_contents
