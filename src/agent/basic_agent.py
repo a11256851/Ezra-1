@@ -4,6 +4,7 @@ import json
 import os
 import subprocess
 import sys
+import io
 from typing import Any
 
 from langchain.agents import create_agent
@@ -11,6 +12,8 @@ from langchain_core.messages import BaseMessage, HumanMessage
 from langchain_core.tools import tool
 from langchain_ollama import ChatOllama
 from langgraph.checkpoint.memory import InMemorySaver
+from io import BytesIO
+from PIL import Image
 
 
 class LangChainAgentManager:
@@ -70,21 +73,128 @@ class LangChainAgentManager:
         ):
             if hasattr(chunk, "content") and chunk.content:
                 yield chunk.content
+    """
+    def _prepare_image_for_vlm(
+        self,
+        img_path: str,
+        max_size: int = 1600,
+        quality: int = 85,
+    ) -> str:
+
+        with Image.open(img_path) as img:
+            # PNG 可能是 RGBA，JPEG 不支援 alpha
+            if img.mode != "RGB":
+                img = img.convert("RGB")
+
+            # 保持比例縮小
+            img.thumbnail(
+                (max_size, max_size),
+                Image.Resampling.LANCZOS,
+            )
+
+            buffer = BytesIO()
+
+            img.save(
+                buffer,
+                format="JPEG",
+                quality=quality,
+                optimize=True,
+            )
+
+            encoded_string = base64.b64encode(
+                buffer.getvalue()
+            ).decode("utf-8")
+
+        return f"data:image/jpeg;base64,{encoded_string}"
+    """
+
+    def _prepare_image_for_vlm(
+        self,
+        img_path_or_url: str,
+        max_size: int = 1536,
+        quality: int = 80,
+    ) -> str:
+        """
+        Prepare an image for VLM:
+        - load image
+        - resize if necessary
+        - convert to RGB
+        - JPEG compress
+        - return base64 string
+        """
+
+        image = Image.open(img_path_or_url)
+
+        # 如果圖片有透明背景，先放到白色背景
+        if image.mode in ("RGBA", "LA") or (
+            image.mode == "P" and "transparency" in image.info
+        ):
+            image = image.convert("RGBA")
+
+            background = Image.new(
+                "RGB",
+                image.size,
+                "white",
+            )
+
+            background.paste(
+                image,
+                mask=image.getchannel("A"),
+            )
+
+            image = background
+
+        else:
+            # 其他模式直接轉 RGB
+            image = image.convert("RGB")
+
+            # 限制圖片最大尺寸
+        image.thumbnail(
+            (max_size, max_size),
+            Image.Resampling.LANCZOS,
+        )
+
+        # JPEG 壓縮
+        buffer = io.BytesIO()
+
+        image.save(
+            buffer,
+            format="JPEG",
+            quality=quality,
+            optimize=True,
+        )
+
+        image_bytes = buffer.getvalue()
+
+        # Base64
+        img_data = base64.b64encode(image_bytes).decode("utf-8")
+
+        print(
+            f"[VLM Image] "
+            f"size={image.size}, "
+            f"JPEG={len(image_bytes) / 1024:.1f} KB, "
+            f"Base64={len(img_data) / 1024:.1f} KB"
+        )
+
+        return img_data
+
 
     def get_img_caption(
         self, question: str, img_path_or_url: str, thread_id: str = "default-thread"
     ):
         config = {"configurable": {"thread_id": thread_id}}
+
         if os.path.exists(img_path_or_url):
-            with open(img_path_or_url, "rb") as img_file:
-                encoded_string = base64.b64encode(img_file.read()).decode("utf-8")
-            ext = os.path.splitext(img_path_or_url)[1].replace(".", "")
-            mime_type = (
-                f"image/{ext}"
-                if ext in ["png", "jpg", "jpeg", "webp"]
-                else "image/jpeg"
-            )
-            img_data = f"data:{mime_type};base64,{encoded_string}"
+#            with open(img_path_or_url, "rb") as img_file:
+#                encoded_string = base64.b64encode(img_file.read()).decode("utf-8")
+#            ext = os.path.splitext(img_path_or_url)[1].replace(".", "")
+#            mime_type = (
+#                f"image/{ext}"
+#                if ext in ["png", "jpg", "jpeg", "webp"]
+#                else "image/jpeg"
+#            )
+#            img_data = f"data:{mime_type};base64,{encoded_string}"
+            img_data=self._prepare_image_for_vlm(img_path_or_url)
         else:
             img_data = img_path_or_url
         message_content = [
@@ -180,6 +290,8 @@ def example():
         except KeyboardInterrupt:
             print("\n\nInterrupted. Goodbye!")
             sys.exit(0)
+
+
 
 
 if __name__ == "__main__":

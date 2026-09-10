@@ -8,6 +8,7 @@ from io import BytesIO
 from pathlib import Path
 from threading import Thread
 from typing import Dict, List, Tuple
+from PIL import Image
 
 import jieba
 import pymupdf4llm
@@ -55,13 +56,44 @@ class Parser:
             # ocr_language="eng" # +chi_tra for traditional Chinese
         )
         return md_text
+    
+    def _resize_image_for_vlm(
+        self,
+        img_path: str,
+        max_size: int = 1600,
+        quality: int = 85,
+        ) -> str:
+        img_path = Path(img_path)
+
+        with Image.open(img_path) as img:
+            img = img.convert("RGB")
+
+            # 保持比例縮小
+            img.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
+
+            output_path = img_path.with_suffix(".jpg")
+
+            img.save(
+                output_path,
+                format="JPEG",
+                quality=quality,
+                optimize=True,
+            )
+        return str(output_path)
+
 
     def _get_description_for_img(
         self, img_path, context: str = "無", thread_id: str = "default-thread"
     ) -> str:
+        vlm_img_path = self._resize_image_for_vlm(
+        img_path,
+        max_size=1600,
+        quality=85,
+        )
+
         response = self.agent.get_img_caption(
             question=f"原圖片上下文：\n{context}\n請分析並簡短描述圖片內容，回覆內容僅須描述即可，不須包含任何問候或詢問句。".strip(),
-            img_path_or_url=img_path,
+            img_path_or_url=vlm_img_path,
             thread_id=thread_id,
         )
         return response
