@@ -14,9 +14,66 @@ from langchain_ollama import ChatOllama
 from langgraph.checkpoint.memory import InMemorySaver
 from io import BytesIO
 from PIL import Image
+from datetime import datetime
 
 
 class LangChainAgentManager:
+
+    def _save_vlm_output(self, content: str ,img_path: str = ""):
+        log_path = "tmp/vlm_output.txt"
+
+        os.makedirs(
+            os.path.dirname(log_path),
+            exist_ok=True,
+        )
+
+        processing = getattr(
+            self,
+            "_last_image_processing_info",
+            {},
+        )
+
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write("\n")
+            f.write("=" * 80 + "\n")
+
+            f.write(f"時間：{datetime.now()}\n")
+
+            f.write(f"圖片：{img_path}\n")
+
+            if processing:
+                f.write(
+                    f"處理：{processing['processing']}\n"
+                )
+
+                f.write(
+                    f"原始尺寸："
+                    f"{processing['original_size'][0]}x"
+                    f"{processing['original_size'][1]}\n"
+                )
+
+                f.write(
+                    f"處理後尺寸："
+                    f"{processing['processed_size'][0]}x"
+                    f"{processing['processed_size'][1]}\n"
+                )
+
+                f.write(
+                    f"JPEG大小："
+                    f"{processing['jpeg_size'] / 1024:.1f} KB\n"
+                )
+
+                f.write(
+                    f"Base64大小："
+                    f"{processing['base64_size'] / 1024:.1f} KB\n"
+                )
+
+            f.write("-" * 80 + "\n")
+            f.write("VLM輸出：\n")
+            f.write(content)
+            f.write("\n")
+            f.write("=" * 80 + "\n")
+
     def __init__(
         self, system_prompt: str = "你是 Langchain Agent ，請盡你所能回答使用者問題。"
     ):
@@ -111,9 +168,10 @@ class LangChainAgentManager:
     def _prepare_image_for_vlm(
         self,
         img_path_or_url: str,
-        max_size: int = 1536,
-        quality: int = 80,
+        max_size: int = 1600,
+        quality: int = 85,
     ) -> str:
+        
         """
         Prepare an image for VLM:
         - load image
@@ -124,6 +182,8 @@ class LangChainAgentManager:
         """
 
         image = Image.open(img_path_or_url)
+        original_size = image.size
+        processing_steps = []
 
         # 如果圖片有透明背景，先放到白色背景
         if image.mode in ("RGBA", "LA") or (
@@ -143,16 +203,23 @@ class LangChainAgentManager:
             )
 
             image = background
+            processing_steps.append("透明背景轉白底")
 
         else:
             # 其他模式直接轉 RGB
             image = image.convert("RGB")
+            processing_steps.append("RGB轉換")
 
-            # 限制圖片最大尺寸
+        # 限制圖片最大尺寸
         image.thumbnail(
             (max_size, max_size),
             Image.Resampling.LANCZOS,
         )
+
+        processing_steps.append(
+            f"最大尺寸{max_size}x{max_size}"
+        )
+        processing_steps.append("LANCZOS縮放")
 
         # JPEG 壓縮
         buffer = io.BytesIO()
@@ -164,25 +231,51 @@ class LangChainAgentManager:
             optimize=True,
         )
 
+        processing_steps.append(
+            f"JPEG(Quality={quality}, Optimize=True)"
+        )
+
         image_bytes = buffer.getvalue()
 
         # Base64
         img_data = base64.b64encode(image_bytes).decode("utf-8")
+        processing_steps.append("Base64編碼")
+
+        processing_info = " → ".join(processing_steps)
+        '''
+        print("========== 圖片的處理資訊 ==========")
 
         print(
             f"[VLM Image] "
-            f"size={image.size}, "
+            f"原始尺寸={original_size}, "
+            f"處理後尺寸={image.size}, "
             f"JPEG={len(image_bytes) / 1024:.1f} KB, "
             f"Base64={len(img_data) / 1024:.1f} KB"
         )
 
-        return img_data
+        print("========== END 圖片的處理資訊 ==========")
+
+        self._last_image_processing_info = {
+            "original_size": original_size,
+            "processed_size": image.size,
+            "jpeg_size": len(image_bytes),
+            "base64_size": len(img_data),
+            "processing": processing_info,
+        }
+        '''
+        
+        return f"data:image/jpeg;base64,{img_data}"
+
+        #return img_data
 
 
     def get_img_caption(
-        self, question: str, img_path_or_url: str, thread_id: str = "default-thread"
+        self,
+        question: str,
+        img_path_or_url: str,
+    #    thread_id: str = "default-thread"
     ):
-        config = {"configurable": {"thread_id": thread_id}}
+    #    config = {"configurable": {"thread_id": thread_id}}
 
         if os.path.exists(img_path_or_url):
 #            with open(img_path_or_url, "rb") as img_file:
@@ -204,10 +297,24 @@ class LangChainAgentManager:
                 "image_url": {"url": img_data},
             },
         ]
-        result = self.agent.invoke(
+
+        print("[VLM] Sending request to Ollama...")
+
+
+        result = self.llm.invoke(
+            [
+                HumanMessage(
+                    content=message_content
+                )
+            ]
+        )
+
+        '''
+        result = self.llm.invoke(
             {"messages": [HumanMessage(content=message_content)]}, config
         )
 
+        
         if isinstance(result, dict) and "messages" in result:
             messages = result["messages"]
             if messages:
@@ -215,6 +322,20 @@ class LangChainAgentManager:
                 if isinstance(last_msg, BaseMessage):
                     return last_msg.content
                 return str(last_msg)
+        '''
+        print("[VLM] Response received.")
+
+        if isinstance(result, BaseMessage):
+            #print("========== VLM OUTPUT result.content ==========")
+            #print(img_path_or_url) #檔案路徑
+            #print(result.content)
+            self._save_vlm_output(result.content, img_path_or_url)
+            #print("========== END VLM OUTPUT ==========")
+            return result.content
+        #print("========== VLM OUTPUT result ==========")
+        #print(result)
+        self._save_vlm_output(str(result), img_path_or_url)
+        #print("========== END VLM OUTPUT ==========")
 
         return str(result)
 
