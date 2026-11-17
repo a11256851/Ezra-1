@@ -130,20 +130,22 @@ async def store(request: Request, files: List[UploadFile] = File(...)):
             # PDF 會在這裡直接轉成 Markdown、處理圖片，並由 parser 印出結果。
             print(f"\n===== Start Parsing {len(needed2parse)} PDF Files =====\n")
             parsed_raw_contents = parser.parse(files=needed2parse, contexts={})
-
+            
             if isinstance(parsed_raw_contents, str):
                 print(f"Error occurred while parsing PDF files: {parsed_raw_contents}")
                 return {"status": "error", "message": parsed_raw_contents}
 
             for file_obj, markdown in zip(needed2parse, parsed_raw_contents):
                 pdf_filename = Path(file_obj.name).name
+                
                 print(f"\n===== Markdown Output: {pdf_filename} =====\n")
                 print(markdown)
                 print(f"\n===== End Markdown Output: {pdf_filename} =====\n")
+                
 
             for file_obj, content in zip(needed2parse, parsed_raw_contents):
                 pdf_filename = Path(file_obj.name).name
-                print(f"===== Processing PDF: {pdf_filename} =====")
+                #print(f"===== Processing PDF: {pdf_filename} =====")
                 pdf_metadata, pdf_chunks = pdf_chunker.chunk(content)
 
                 chunks = [chunk["content"] for chunk in pdf_chunks]
@@ -152,10 +154,35 @@ async def store(request: Request, files: List[UploadFile] = File(...)):
                     for chunk in pdf_chunks
                 ]
 
+                print(f"===== 解決儲存失敗的問題 =====")
+                print(f"===== pdf_chunks =====")
+                print(f"PDF chunks 數量：{len(pdf_chunks)}")
+                print(f"chunks 數量：{len(chunks)}")
+                print(f"metadata 數量：{len(metadata)}")
+
+                print(f"===== 存儲結果 =====")
+
                 if chunks:
+                    a=1
+
+                    print(f"第{a}個 chunk：")
+                    print(chunks[a-1])
+
+                    print(f"\n第{a}個 metadata：")
+                    print(metadata[a-1])
+
+                    a+=1
+
                     msg = retrieval_manager.store(chunks=chunks, metadata=metadata)
+                    print("\n===== Vector DB Store Result =====")
+                    print(f"chunks 數量：{len(chunks)}")
+                    print(f"metadata 數量：{len(metadata)}")
+                    print(f"store() 回傳型別：{type(msg)}")
+                    print(f"store() 回傳內容：{msg}")
+                    print("==================================\n")
                     if "Success" in msg:
                         success_count += 1
+                    print(f"success_count：{success_count}")
 
         total_files = len(wrapped_files) + len(needed2parse)
 

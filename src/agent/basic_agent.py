@@ -369,7 +369,7 @@ def example():
 
         try:
             reply = agent_manager.get_response(args.question, thread_id)
-            print(reply)
+            #print(reply)
 
         except Exception as e:
             print(f"Error: {e}", file=sys.stderr)
@@ -379,7 +379,7 @@ def example():
             sys.exit(1)
     else:
         print("LangChain Agent (Multi-turn with Memory)")
-        print(f"Thread ID: {thread_id}")
+        #print(f"Thread ID: {thread_id}")
         print("Type your questions or 'exit' to quit\n")
 
         try:
@@ -401,7 +401,7 @@ def example():
 
                 try:
                     reply = agent_manager.get_response(question, thread_id)
-                    print(reply)
+                    #print(reply)
 
                 except Exception as e:
                     print(f"Error: {e}", file=sys.stderr)
